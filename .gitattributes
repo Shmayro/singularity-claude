@@ -1,0 +1,12 @@
+# Normalize line endings
+* text=auto
+
+# Shell scripts always LF
+*.sh text eol=lf
+hooks/session-start text eol=lf
+
+# Markdown
+*.md text
+
+# JSON
+*.json text

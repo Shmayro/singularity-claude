@@ -1,0 +1,15 @@
+{
+  "name": "singularity-claude",
+  "description": "Self-evolving skill engine for Claude Code",
+  "owner": {
+    "name": "Haroun El Alami"
+  },
+  "plugins": [
+    {
+      "name": "singularity-claude",
+      "description": "Self-evolving skill engine for Claude Code. Creates, scores, repairs, and hardens skills autonomously.",
+      "version": "0.1.0",
+      "source": "./"
+    }
+  ]
+}

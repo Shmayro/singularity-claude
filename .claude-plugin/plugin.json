@@ -1,0 +1,21 @@
+{
+  "name": "singularity-claude",
+  "description": "Self-evolving skill engine for Claude Code. Creates, scores, repairs, and hardens skills autonomously through recursive improvement cycles.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Haroun El Alami"
+  },
+  "homepage": "https://github.com/shmayro/singularity-claude",
+  "repository": "https://github.com/shmayro/singularity-claude",
+  "license": "MIT",
+  "keywords": [
+    "skills",
+    "evolution",
+    "self-improving",
+    "scoring",
+    "auto-repair",
+    "crystallization",
+    "memory",
+    "claude-code"
+  ]
+}

@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# SessionStart hook for singularity-claude plugin
+# Injects using-singularity context and skill health alerts
+
+set -euo pipefail
+
+# Determine plugin root directory
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PLUGIN_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# Data directory
+SINGULARITY_DATA="${HOME}/.claude/singularity"
+
+# Ensure data directories exist
+mkdir -p "${SINGULARITY_DATA}/scores"
+mkdir -p "${SINGULARITY_DATA}/telemetry"
+
+# Initialize registry if it doesn't exist
+if [ ! -f "${SINGULARITY_DATA}/registry.json" ]; then
+  cat > "${SINGULARITY_DATA}/registry.json" << 'REGISTRY'
+{
+  "$schema": "singularity-registry-v1",
+  "skills": {}
+}
+REGISTRY
+fi
+
+# Initialize config if it doesn't exist
+if [ ! -f "${SINGULARITY_DATA}/config.json" ]; then
+  cat > "${SINGULARITY_DATA}/config.json" << 'CONFIG'
+{
+  "autoRepairThreshold": 50,
+  "crystallizationThreshold": 90,
+  "crystallizationMinExecutions": 5,
+  "hardeningMinExecutions": 3,
+  "telemetryEnabled": true,
+  "scoringMode": "auto",
+  "skillOutputDir": "~/.claude/skills",
+  "gitTagPrefix": "singularity/"
+}
+CONFIG
+fi
+
+# Read using-singularity content
+using_singularity_content=$(cat "${PLUGIN_ROOT}/skills/using-singularity/SKILL.md" 2>&1 || echo "Error reading using-singularity skill")
+
+# Build alerts from registry
+alerts=""
+if command -v jq &>/dev/null && [ -f "${SINGULARITY_DATA}/registry.json" ]; then
+  # Find skills needing repair (avg < 50 with 2+ executions)
+  repair_needed=$(jq -r '
+    .skills | to_entries[]
+    | select(.value.averageScore < 50 and .value.executionCount >= 2)
+    | "  - ⚠ \(.key): avg score \(.value.averageScore)/100 (\(.value.executionCount) runs) — needs repair"
+  ' "${SINGULARITY_DATA}/registry.json" 2>/dev/null || true)
+
+  # Find skills ready for crystallization (avg >= 90 with 5+ executions)
+  crystal_ready=$(jq -r '
+    .skills | to_entries[]
+    | select(.value.averageScore >= 90 and .value.executionCount >= 5 and .value.maturity != "crystallized")
+    | "  - ✦ \(.key): avg score \(.value.averageScore)/100 (\(.value.executionCount) runs) — ready to crystallize"
+  ' "${SINGULARITY_DATA}/registry.json" 2>/dev/null || true)
+
+  if [ -n "$repair_needed" ] || [ -n "$crystal_ready" ]; then
+    alerts="\n\n**Skill Alerts:**\n"
+    [ -n "$repair_needed" ] && alerts="${alerts}${repair_needed}\n"
+    [ -n "$crystal_ready" ] && alerts="${alerts}${crystal_ready}\n"
+  fi
+fi
+
+# Escape string for JSON embedding
+escape_for_json() {
+    local s="$1"
+    s="${s//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"
+    s="${s//$'\r'/\\r}"
+    s="${s//$'\t'/\\t}"
+    printf '%s' "$s"
+}
+
+using_singularity_escaped=$(escape_for_json "$using_singularity_content")
+alerts_escaped=$(escape_for_json "$alerts")
+session_context="<SINGULARITY_ENGINE>\nYou have singularity-claude — a self-evolving skill engine.\n\n${using_singularity_escaped}\n${alerts_escaped}\n</SINGULARITY_ENGINE>"
+
+# Output context injection as JSON
+# Cursor hooks expect additional_context
+# Claude Code hooks expect hookSpecificOutput.additionalContext
+if [ -n "${CURSOR_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+elif [ -n "${CLAUDE_PLUGIN_ROOT:-}" ]; then
+  printf '{\n  "hookSpecificOutput": {\n    "hookEventName": "SessionStart",\n    "additionalContext": "%s"\n  }\n}\n' "$session_context"
+else
+  printf '{\n  "additional_context": "%s"\n}\n' "$session_context"
+fi
+
+exit 0

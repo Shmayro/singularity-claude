@@ -1,0 +1,17 @@
+{
+  "$schema": "singularity-score-v1",
+  "skillName": "{{SKILL_NAME}}",
+  "versions": [
+    {
+      "version": "v1.0.0",
+      "gitTag": "singularity/{{SKILL_NAME}}/v1.0.0",
+      "scores": [],
+      "averageScore": 0,
+      "executionCount": 0,
+      "maturity": "draft"
+    }
+  ],
+  "currentVersion": "v1.0.0",
+  "createdAt": "{{TIMESTAMP}}",
+  "lastScoredAt": null
+}
