@@ -8,11 +8,22 @@
     "type": "git",
     "url": "https://github.com/shmayro/singularity-claude"
   },
+  "homepage": "https://github.com/shmayro/singularity-claude#readme",
   "keywords": [
     "claude-code",
     "skills",
     "evolution",
     "self-improving",
     "ai-agent"
+  ],
+  "files": [
+    "skills/",
+    "agents/",
+    "scripts/",
+    "hooks/",
+    ".claude-plugin/",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
   ]
 }

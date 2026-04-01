@@ -99,14 +99,28 @@ Skills are scored after every execution. Low scores trigger automatic repair. Hi
 
 ## Installation
 
-### From marketplace
+### From the official Claude Code plugin registry
+
+> **Requires** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
+
+Inside a Claude Code session, run:
+
+```
+/plugin marketplace add Shmayro/singularity-claude
+/plugin install singularity-claude
+```
+
+### From npm
 
 ```bash
-# Add the marketplace
-claude plugin marketplace add shmayro/singularity-claude
+npm install -g singularity-claude
+```
 
-# Install the plugin
-claude plugin install singularity-claude
+Then inside a Claude Code session:
+
+```
+/plugin marketplace add $(npm root -g)/singularity-claude
+/plugin install singularity-claude
 ```
 
 ### From source
@@ -114,8 +128,13 @@ claude plugin install singularity-claude
 ```bash
 git clone https://github.com/shmayro/singularity-claude.git
 cd singularity-claude
-claude plugin marketplace add .
-claude plugin install singularity-claude
+```
+
+Then inside a Claude Code session:
+
+```
+/plugin marketplace add .
+/plugin install singularity-claude
 ```
 
 ## Quick Start
