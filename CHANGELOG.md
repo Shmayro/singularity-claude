@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **empirical-tuning** skill — pre-crystallize hardening loop that dispatches blind-executor subagents, collects qualitative + quantitative feedback, and refines the skill's prompt until convergence. Adapted from mizchi's [empirical-prompt-tuning](https://github.com/mizchi/chezmoi-dotfiles/blob/main/dot_claude/skills/empirical-prompt-tuning/SKILL.md) with a CCC extension: explicit **Qualitative convergence criteria** (location convergence as primary signal, severity variance ≤±15pt accepted as noise) to make the convergence decision reproducible across blind-runner runs.
+
 ## [0.1.0] - 2026-03-17
 
 ### Added
