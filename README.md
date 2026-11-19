@@ -26,25 +26,26 @@ You end up with a growing pile of skills where some work great, some are mediocr
 **singularity-claude** adds a recursive evolution loop to your skills:
 
 ```mermaid
+%%{init: {"flowchart": {"wrappingWidth": 400}}}%%
 graph TD
     Goal["🎯 Goal:<br/>Set up API proxy endpoints"]
     Goal --> HasSkill{Skill exists?}
 
     HasSkill -->|No| Gap["🔍 Gap detected:<br/>recurring pattern"]
-    Gap --> Create["⚙️ /singularity-create\nGather requirements\nGenerate SKILL.md\nRegister + init scoring"]
+    Gap --> Create["⚙️ /singularity-create<br/>Gather requirements<br/>Generate SKILL.md<br/>Register + init scoring"]
     Create --> Execute
 
     HasSkill -->|Yes| Execute["⚡ Execute skill"]
-    Execute --> Score["📊 /singularity-score\nDispatch assessor agent\nRate 5 dimensions · 0-100"]
-    Score --> Maturity["🔄 Auto-update maturity\ndraft → tested → hardened"]
+    Execute --> Score["📊 /singularity-score<br/>Dispatch assessor agent<br/>Rate 5 dimensions · 0-100"]
+    Score --> Maturity["🔄 Auto-update maturity<br/>draft → tested → hardened"]
 
-    Maturity --> Low{Avg < 50\n2+ runs?}
-    Low -->|Yes| Repair["🔧 /singularity-repair\nAnalyze telemetry\nRewrite weak dimensions\nBump version · re-test"]
+    Maturity --> Low{Avg < 50<br/>2+ runs?}
+    Low -->|Yes| Repair["🔧 /singularity-repair<br/>Analyze telemetry<br/>Rewrite weak dimensions<br/>Bump version · re-test"]
     Repair --> Execute
 
-    Low -->|No| High{Avg ≥ 90 · 5+ runs\nhardened · edge cases?}
-    High -->|Yes| Crystal["💎 /singularity-crystallize\nGit tag + lock version"]
-    Crystal --> Done["✅ Production-grade skill\nImmutable · rollback-safe"]
+    Low -->|No| High{Avg ≥ 90 · 5+ runs<br/>hardened · edge cases?}
+    High -->|Yes| Crystal["💎 /singularity-crystallize<br/>Git tag + lock version"]
+    Crystal --> Done["✅ Production-grade skill<br/>Immutable · rollback-safe"]
 
     High -->|No| Loop["🔁 Keep using + scoring"]
     Loop --> Execute
