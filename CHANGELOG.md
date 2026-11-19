@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.2.0] - 2026-11-20
+
+### Breaking
+- Skill folders renamed so the commands are short and actually exist. Plugin skills are always invoked as `/<plugin>:<skill>`; the `/singularity-create`-style commands advertised in 0.1.0 never existed. New commands: `/singularity-claude:create`, `:score`, `:repair`, `:review`, `:crystallize`, `:dashboard`.
+
+### Added
+- `hooks/log-use`: counts every run of a tracked skill, whether Claude invoked it (`PostToolUse` on the Skill tool) or you typed its command (`UserPromptExpansion`). Registry gets `useCount` and `lastUsed`.
+- `score-manager.sh register | used | bump | crystallize`. It is now the only writer of `registry.json`; `add` keeps the registry in sync.
+- Repair backs up the skill to `~/.claude/singularity/backups/` before editing and restores it if the new version does not score better.
+- `tests/run.sh`: end-to-end checks of scripts and hooks, run in CI.
+
+### Changed
+- Session start no longer injects the `using-singularity` skill into every session. It only reports skills to repair or crystallize, as plain facts, and reads thresholds from `config.json`.
+- Descriptions follow current Claude Code guidance: what the skill does and when to use it. Repair, review, crystallize and dashboard are user-only (`disable-model-invocation`); skills taking a skill name have `argument-hint`.
+- `create` points to Anthropic's `skill-creator` for writing and testing when it is installed.
+
 ## [0.1.0] - 2026-03-17
 
 ### Added

@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Records each use of a singularity-managed skill, so usage data exists even when nobody runs a score.
+# Two ways a skill runs, two hook events (see hooks.json):
+#   PostToolUse on the Skill tool     -> Claude invoked it         (input: .tool_input.skill)
+#   UserPromptExpansion               -> you typed /name yourself  (input: .command_name)
+# Silent, never blocks: any problem just means this use is not counted.
+
+set -u
+command -v jq &>/dev/null || exit 0
+
+input=$(cat)
+name=$(printf '%s' "$input" | jq -r '.tool_input.skill // .command_name // empty' 2>/dev/null) || exit 0
+[ -n "$name" ] || exit 0
+case "$name" in singularity-claude:*) exit 0 ;; esac   # the engine's own skills are not tracked
+name="${name##*:}"                                      # "plugin:skill" -> "skill", as stored in the registry
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+registry="${HOME}/.claude/singularity/registry.json"
+[ -f "$registry" ] && jq -e --arg s "$name" '.skills[$s]' "$registry" >/dev/null 2>&1 || exit 0
+
+event=$(printf '%s' "$input" | jq -r '.hook_event_name // "unknown"')
+how="claude"; [ "$event" = "UserPromptExpansion" ] && how="user"
+
+bash "${ROOT}/scripts/score-manager.sh" used "$name" >/dev/null 2>&1
+bash "${ROOT}/scripts/telemetry-writer.sh" log "$name" --trigger "used-by-${how}" --summary "Skill used (not scored yet)" >/dev/null 2>&1
+exit 0

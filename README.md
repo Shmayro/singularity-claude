@@ -8,7 +8,7 @@
   <p align="center">
     <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
     <a href="#installation"><img src="https://img.shields.io/badge/Claude%20Code-Plugin-blue?logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48Y2lyY2xlIGN4PSIxMiIgY3k9IjEyIiByPSIxMCIgZmlsbD0id2hpdGUiLz48L3N2Zz4=" alt="Claude Code Plugin"></a>
-    <img src="https://img.shields.io/badge/Version-0.1.0-green" alt="Version">
+    <img src="https://img.shields.io/badge/Version-0.2.0-green" alt="Version">
     <img src="https://img.shields.io/badge/Status-Experimental-orange" alt="Status">
   </p>
 </p>
@@ -32,20 +32,20 @@ graph TD
     Goal --> HasSkill{Skill exists?}
 
     HasSkill -->|No| Gap["🔍 Gap detected:<br/>recurring pattern"]
-    Gap --> Create["⚙️ /singularity-create<br/>Gather requirements<br/>Generate SKILL.md<br/>Register + init scoring"]
+    Gap --> Create["⚙️ /singularity-claude:create<br/>Gather requirements<br/>Generate SKILL.md<br/>Register + init scoring"]
     Create --> Execute
 
-    HasSkill -->|Yes| Execute["⚡ Execute skill"]
-    Execute --> Score["📊 /singularity-score<br/>Dispatch assessor agent<br/>Rate 5 dimensions · 0-100"]
+    HasSkill -->|Yes| Execute["⚡ Execute skill<br/>every use counted automatically"]
+    Execute --> Score["📊 /singularity-claude:score<br/>Dispatch assessor agent<br/>Rate 5 dimensions · 0-100"]
     Score --> Maturity["🔄 Auto-update maturity<br/>draft → tested → hardened"]
 
     Maturity --> Low{Avg < 50<br/>2+ runs?}
-    Low -->|Yes| Repair["🔧 /singularity-repair<br/>Analyze telemetry<br/>Rewrite weak dimensions<br/>Bump version · re-test"]
+    Low -->|Yes| Repair["🔧 /singularity-claude:repair<br/>Back up · analyze scores<br/>Rewrite weak parts<br/>New version · re-test or revert"]
     Repair --> Execute
 
     Low -->|No| High{Avg ≥ 90 · 5+ runs<br/>hardened · edge cases?}
-    High -->|Yes| Crystal["💎 /singularity-crystallize<br/>Git tag + lock version"]
-    Crystal --> Done["✅ Production-grade skill<br/>Immutable · rollback-safe"]
+    High -->|Yes| Crystal["💎 /singularity-claude:crystallize<br/>Git tag or copy · lock version"]
+    Crystal --> Done["✅ Production-grade skill<br/>Restorable at any time"]
 
     High -->|No| Loop["🔁 Keep using + scoring"]
     Loop --> Execute
@@ -66,7 +66,7 @@ graph TD
 
 > **Tip:** Click the expand button (↔) on the diagram to see the full interactive flow.
 
-Skills are scored after every execution. Low scores trigger automatic repair. High scores lead to crystallization — a locked, battle-tested version you can trust. Every step is logged for full auditability.
+Every time a tracked skill runs, a hook counts it, whether Claude invoked it or you typed its command. You score the runs that matter. A low average leads to a repair suggestion; a repair backs up the skill first and reverts if the new version does not do better. A high average over enough runs leads to crystallization, a version you can always restore. Every step is logged.
 
 **No external dependencies.** No SmythOS, no OpenTelemetry collector, no Docker. Pure Claude Code.
 
@@ -74,15 +74,17 @@ Skills are scored after every execution. Low scores trigger automatic repair. Hi
 
 ### Skills (7)
 
-| Skill | Command | Purpose |
-|-------|---------|---------|
-| **using-singularity** | *(auto-loaded)* | Bootstrap context + capability gap detection |
-| **creating-skills** | `/singularity-create` | Build new skills through a structured workflow |
-| **scoring** | `/singularity-score` | Rate execution on a 5-dimension rubric (0-100) |
-| **repairing** | `/singularity-repair` | Auto-fix failing skills by analyzing score history |
-| **crystallizing** | `/singularity-crystallize` | Lock validated versions via git tags |
-| **reviewing** | `/singularity-review` | Health check with trend analysis |
-| **dashboard** | `/singularity-dashboard` | Overview of all managed skills |
+Plugin skills are always invoked as `/<plugin>:<skill>`, so every command starts with `singularity-claude:`.
+
+| Command | Who starts it | Purpose |
+|---------|---------------|---------|
+| `/singularity-claude:create` | you or Claude | Build a new skill and start tracking it |
+| `/singularity-claude:score <skill>` | you or Claude | Rate a run on a 5-part rubric (0-100) |
+| `/singularity-claude:review <skill>` | you | Health report and next step |
+| `/singularity-claude:repair <skill>` | you | Fix a low-scoring skill, with backup and revert |
+| `/singularity-claude:crystallize <skill>` | you | Lock a proven version |
+| `/singularity-claude:dashboard` | you | All tracked skills in one table |
+| `using-singularity` | Claude, when relevant | Explains the engine and the commands |
 
 ### Agents (2)
 
@@ -91,20 +93,28 @@ Skills are scored after every execution. Low scores trigger automatic repair. Hi
 | **skill-assessor** | Haiku | Fast, cheap automated scoring against the rubric |
 | **gap-detector** | Haiku | Analyzes failed tasks to find missing skill capabilities |
 
-### Scripts (2)
+### Scripts and hooks
 
-| Script | Purpose |
-|--------|---------|
-| `score-manager.sh` | CLI for reading/writing score JSON files (atomic writes, jq/node fallback) |
-| `telemetry-writer.sh` | CLI for structured execution logging with replay support |
+| File | Purpose |
+|------|---------|
+| `scripts/score-manager.sh` | Scores, versions and the registry. The only writer of `registry.json` |
+| `scripts/telemetry-writer.sh` | Structured execution log per skill |
+| `hooks/log-use` | Counts every run of a tracked skill (`PostToolUse` on the Skill tool, `UserPromptExpansion` for typed commands) |
+| `hooks/session-start` | Creates the data folder; reports skills to repair or crystallize, and prints nothing otherwise |
 
 ## Installation
 
-### From the official Claude Code plugin registry
+### From GitHub
 
 > **Requires** [Claude Code](https://docs.anthropic.com/en/docs/claude-code) CLI
 
-Inside a Claude Code session, run:
+Inside a Claude Code session (2.1.275 or later), run:
+
+```
+/plugin install singularity-claude --marketplace Shmayro/singularity-claude
+```
+
+On older versions, add the marketplace first:
 
 ```
 /plugin marketplace add Shmayro/singularity-claude
@@ -140,28 +150,30 @@ Then inside a Claude Code session:
 
 ## Quick Start
 
-```bash
-# 1. Start a new Claude Code session — singularity loads automatically
+```
+# 1. Create your first skill
+/singularity-claude:create
 
-# 2. Create your first skill
-/singularity-create
+# 2. Use it on real work. Each use is counted automatically.
 
-# 3. Use the skill, then score it
-/singularity-score
+# 3. Score a run that matters
+/singularity-claude:score my-skill
 
-# 4. Check the dashboard
-/singularity-dashboard
+# 4. See where all your skills stand
+/singularity-claude:dashboard
 ```
 
-That's it. The evolution loop starts running from the first score.
+Already have skills in `~/.claude/skills/`? Use one, then run `/singularity-claude:score my-existing-skill`: it offers to start tracking it, no need to recreate it.
 
 ## How It Works
 
 ### The Evolution Loop
 
-**1. Create** — `/singularity-create` walks you through building a new skill: requirements gathering, duplicate checking, SKILL.md generation, registry registration, and initial scoring.
+**1. Create.** `/singularity-claude:create` asks what the skill should do and when, checks for overlap with existing skills, writes the SKILL.md, registers it and scores a first test run. If Anthropic's `skill-creator` skill is installed, it uses it for the writing and testing.
 
-**2. Score** — After every skill execution, `/singularity-score` dispatches a Haiku assessor agent that rates the output on 5 dimensions:
+**2. Use.** A hook counts every run of a tracked skill, so the dashboard shows real usage even for runs nobody scored.
+
+**3. Score.** `/singularity-claude:score <skill>` dispatches a Haiku assessor agent that rates a run on 5 parts:
 
 | Dimension | What It Measures |
 |-----------|-----------------|
@@ -171,11 +183,11 @@ That's it. The evolution loop starts running from the first score.
 | **Efficiency** (0-20) | Was the approach direct and minimal? |
 | **Reusability** (0-20) | Could the output be reused? |
 
-**3. Repair** — When a skill's average drops below 50 (configurable), `/singularity-repair` kicks in: reads score history + telemetry, identifies the weakest rubric dimensions, rewrites the skill to fix them, bumps the version, and re-tests.
+**4. Repair.** When the average drops below 50 (configurable), the session start reports it and suggests `/singularity-claude:repair <skill>`. The repair reads the score history and telemetry, backs up the current version, rewrites the weak parts as a new version, reruns the failing cases and reverts if they do not score better.
 
-**4. Harden** — Each edge case encountered is recorded. Skills that handle more edge cases with higher scores progress through maturity levels.
+**5. Harden.** Edge cases met in scored runs are recorded. Skills with more edge cases and higher scores move up the maturity levels.
 
-**5. Crystallize** — Once a skill hits 90+ average over 5+ runs with edge cases handled, `/singularity-crystallize` locks it with a git tag. Crystallized skills are immutable — a production-grade snapshot you can always roll back to.
+**6. Crystallize.** At 90+ average over 5+ scored runs with edge cases handled, `/singularity-claude:crystallize <skill>` saves the version with a git tag (or a copy if `~/.claude/skills` is not a git repository). Later edits become a new version; the crystallized one stays restorable.
 
 ### Maturity Progression
 
@@ -191,15 +203,9 @@ graph TD
     style Crystallized fill:#2d6a4f,color:#fff,stroke:#1b4332
 ```
 
-### Capability Gap Detection
+### When Claude suggests a new skill
 
-The `using-singularity` skill (injected at every session start) teaches Claude to recognize when a new skill is needed:
-
-- **Repetition** — Doing the same multi-step procedure across sessions
-- **Failure without coverage** — No existing skill addresses the task
-- **Generalizable pattern** — The procedure applies beyond the current task
-
-When a gap is detected, Claude suggests creating a new skill automatically.
+The `using-singularity` skill loads when you talk about skills or keep repeating the same multi-step procedure. Claude then suggests `/singularity-claude:create`. Nothing is injected into every session: the session-start hook only speaks when a skill needs repair or is ready to crystallize.
 
 ## Data Storage
 
@@ -207,9 +213,11 @@ All data is local. Nothing leaves your machine.
 
 ```
 ~/.claude/singularity/
-├── scores/          # Score history per skill (JSON)
-├── telemetry/       # Execution logs per skill (JSON)
-├── registry.json    # All managed skills
+├── scores/          # Score history per skill and version (JSON)
+├── telemetry/       # One entry per use, score, repair (JSON)
+├── backups/         # Skill copies taken before each repair
+├── crystallized/    # Locked versions (when ~/.claude/skills is not a git repo)
+├── registry.json    # All tracked skills, written only by score-manager.sh
 └── config.json      # Thresholds and preferences
 ```
 

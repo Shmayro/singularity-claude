@@ -30,7 +30,7 @@ jobs:
       - name: Validate hooks.json
         run: python3 -m json.tool hooks/hooks.json > /dev/null
       - name: Validate scoring template
-        run: python3 -m json.tool skills/creating-skills/references/scoring-template.json > /dev/null
+        run: python3 -m json.tool skills/create/references/scoring-template.json > /dev/null
 
   validate-skills:
     name: Validate Skill Metadata
@@ -87,35 +87,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install jq
         run: sudo apt-get install -y jq
-      - name: Test score-manager init
-        run: |
-          export HOME=$(mktemp -d)
-          mkdir -p "$HOME/.claude/singularity/scores"
-          bash scripts/score-manager.sh init test-skill
-          [ -f "$HOME/.claude/singularity/scores/test-skill.json" ] || exit 1
-          echo "PASS: score init"
-      - name: Test score-manager add and list
-        run: |
-          export HOME=$(mktemp -d)
-          mkdir -p "$HOME/.claude/singularity/scores"
-          bash scripts/score-manager.sh init test-skill
-          bash scripts/score-manager.sh add test-skill 85 --context "CI test"
-          output=$(bash scripts/score-manager.sh list test-skill)
-          echo "$output" | grep -q "85" || exit 1
-          echo "PASS: score add and list"
-      - name: Test telemetry-writer log and list
-        run: |
-          export HOME=$(mktemp -d)
-          mkdir -p "$HOME/.claude/singularity/telemetry"
-          bash scripts/telemetry-writer.sh log test-skill --trigger "ci-test" --summary "Testing"
-          output=$(bash scripts/telemetry-writer.sh list test-skill --last 1)
-          echo "$output" | grep -q "ci-test" || exit 1
-          echo "PASS: telemetry log and list"
-      - name: Test session-start hook
-        run: |
-          export HOME=$(mktemp -d)
-          export CLAUDE_PLUGIN_ROOT="$(pwd)"
-          mkdir -p "$HOME/.claude/singularity"
-          output=$(bash hooks/session-start)
-          echo "$output" | python3 -m json.tool > /dev/null || exit 1
-          echo "PASS: session-start hook outputs valid JSON"
+      - name: Scripts and hooks, end to end
+        run: bash tests/run.sh

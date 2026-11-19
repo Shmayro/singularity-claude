@@ -1,60 +1,43 @@
 ---
 name: using-singularity
-description: Use when starting any conversation where skills may need to be created, evaluated, repaired, or when a capability gap is detected during task execution
+description: Explains the singularity-claude skill engine, which tracks how well your own skills perform, repairs the ones that score low and locks the ones that proved themselves. Use when the user asks about singularity, skill scores or maturity, or keeps repeating the same multi-step procedure that could become a skill.
 ---
 
-# Singularity — Self-Evolving Skill Engine
+# Singularity
 
-You have singularity-claude, a system that creates, scores, repairs, and hardens Claude Code skills through recursive improvement cycles.
+singularity-claude tracks skills you create in `~/.claude/skills/`. Every time one of them runs, a hook counts the use. Scoring a run, repairing a weak skill and locking a proven one are separate commands.
 
-## Decision Flow
+## Commands
 
-When a task arrives:
+| Command | What it does |
+|---------|--------------|
+| `/singularity-claude:create` | Build a new skill and start tracking it |
+| `/singularity-claude:score <skill>` | Rate the last run of a skill, 0-100 |
+| `/singularity-claude:review <skill>` | Health report and next step for one skill |
+| `/singularity-claude:repair <skill>` | Fix a skill that scores low, keeping the old version as a backup |
+| `/singularity-claude:crystallize <skill>` | Lock a version that proved itself |
+| `/singularity-claude:dashboard` | All tracked skills in one table |
 
-1. Task arrives → Does a skill exist?
-   - **Yes** → Execute it → Score with `/singularity-score` → Maturity auto-updates
-     - Avg < 50 (2+ runs) → Suggest `/singularity-repair`
-     - Avg ≥ 90, 5+ runs, hardened, edge cases → Suggest `/singularity-crystallize`
-     - Otherwise → Keep using and scoring
-   - **No** → Is this a recurring need?
-     - **Yes** → Create with `/singularity-create`
-     - **No** → Do manually
+## When to suggest a new skill
 
-## Available Commands
+Suggest `/singularity-claude:create` only when the user has done the same multi-step procedure more than once, or says they will. A one-off task does not need a skill.
 
-| Command | Skill | Purpose |
-|---------|-------|---------|
-| `/singularity-create` | `singularity-claude:creating-skills` | Build a new skill |
-| `/singularity-score` | `singularity-claude:scoring` | Rate a skill execution 0-100 |
-| `/singularity-review` | `singularity-claude:reviewing` | Health check a skill |
-| `/singularity-repair` | `singularity-claude:repairing` | Auto-fix a failing skill |
-| `/singularity-crystallize` | `singularity-claude:crystallizing` | Lock a validated version |
-| `/singularity-dashboard` | `singularity-claude:dashboard` | Overview of all managed skills |
+## When to suggest scoring
 
-## Capability Gap Detection
+After a tracked skill finishes a real task, offer `/singularity-claude:score <skill>`. Scores drive the rest: a low average leads to repair, a high one to crystallization.
 
-Watch for these signals during task execution — they indicate a new skill should be created:
+## Data
 
-1. **Repetition across sessions** — You're doing the same multi-step procedure you've done before
-2. **Task failure without skill coverage** — No existing skill addresses this capability
-3. **Generalizable pattern** — The procedure would apply beyond this specific task
-4. **Complex workflow** — The task requires 5+ steps that could be encoded
+- Registry: `~/.claude/singularity/registry.json` (written only by `scripts/score-manager.sh`)
+- Scores: `~/.claude/singularity/scores/<skill>.json`
+- Telemetry: `~/.claude/singularity/telemetry/<skill>/`
+- Config: `~/.claude/singularity/config.json`
 
-When you detect a gap, suggest: *"This looks like a capability gap. Want me to create a skill for this with `/singularity-create`?"*
+## Maturity
 
-## Data Locations
-
-- **Registry:** `~/.claude/singularity/registry.json`
-- **Scores:** `~/.claude/singularity/scores/<skill-name>.json`
-- **Telemetry:** `~/.claude/singularity/telemetry/<skill-name>/`
-- **Config:** `~/.claude/singularity/config.json`
-- **Created skills:** `~/.claude/skills/<skill-name>/SKILL.md`
-
-## Maturity Levels
-
-| Level | Criteria | Meaning |
-|-------|----------|---------|
-| `draft` | < 3 executions | New, unproven |
-| `tested` | 3+ runs, avg >= 60 | Working but not battle-tested |
-| `hardened` | 5+ runs, avg >= 80, edge cases handled | Reliable |
-| `crystallized` | Locked via git tag | Production-grade, immutable |
+| Level | Rule |
+|-------|------|
+| `draft` | fewer than 3 scored runs |
+| `tested` | 3+ scored runs, average 60+ |
+| `hardened` | 5+ scored runs, average 80+, at least one edge case recorded |
+| `crystallized` | locked with `/singularity-claude:crystallize` |

@@ -6,6 +6,7 @@ set -euo pipefail
 
 SINGULARITY_DATA="${HOME}/.claude/singularity"
 SCORES_DIR="${SINGULARITY_DATA}/scores"
+REGISTRY="${SINGULARITY_DATA}/registry.json"
 
 # JSON tool detection
 json_tool=""
@@ -54,6 +55,14 @@ Commands:
   average <skill> [--version <v>]  Get average score
   trend <skill>                    Show score trend across versions
   maturity <skill>                 Get current maturity level
+
+Registry (this script is the only writer of registry.json; needs jq):
+  register <skill>                 Track a skill (creates its score file if missing)
+    [--location <path>]            SKILL.md path (default ~/.claude/skills/<skill>/SKILL.md)
+    [--tags <json-array>]          Tags
+  used <skill>                     Count one use (called by the log-use hook); silent no-op if untracked
+  bump <skill> [--minor]           Start a new version (patch by default) before editing the skill
+  crystallize <skill>              Mark the current version as crystallized
 EOF
   exit 1
 }
@@ -172,8 +181,9 @@ cmd_add() {
     "
   fi
 
-  # Compute and update maturity
+  # Compute and update maturity, then mirror the numbers into the registry
   _update_maturity "$skill" "$version"
+  if [ "$json_tool" = "jq" ] && [ -f "$REGISTRY" ]; then _sync_registry "$skill"; fi
 
   # Show result
   local avg
@@ -284,6 +294,93 @@ cmd_maturity() {
   jq -r '.versions[-1].maturity' "$file"
 }
 
+# ---------- registry: one writer, so registry.json and the score files cannot drift apart ----------
+_require_jq() {
+  [ "$json_tool" = "jq" ] || { echo "Error: jq is required for registry updates" >&2; exit 1; }
+}
+
+_registry_jq() {   # _registry_jq <filter> [jq args...]: apply a jq filter to registry.json atomically
+  local filter="$1"; shift
+  [ -f "$REGISTRY" ] || atomic_write "$REGISTRY" '{"$schema": "singularity-registry-v1", "skills": {}}'
+  local updated
+  updated=$(jq "$@" "$filter" "$REGISTRY")
+  atomic_write "$REGISTRY" "$updated"
+}
+
+_sync_registry() {   # copy version, average, scored runs and maturity from the score file
+  local skill="$1" file="${SCORES_DIR}/${1}.json"
+  [ -f "$file" ] || return 0
+  local ver stats last
+  ver=$(jq -r '.currentVersion' "$file")
+  stats=$(jq -c --arg v "$ver" '.versions[] | select(.version == $v) | {averageScore, executionCount, maturity}' "$file")
+  last=$(jq -c '.lastScoredAt' "$file")
+  _registry_jq '.skills[$s] = ((.skills[$s] // {}) + $st + {currentVersion: $v, lastExecuted: $ls})' \
+    --arg s "$skill" --argjson st "$stats" --arg v "$ver" --argjson ls "$last"
+}
+
+cmd_register() {
+  _require_jq
+  local skill="$1"; shift
+  # shellcheck disable=SC2088  # stored as written, like the other registry paths; never expanded here
+  local location="~/.claude/skills/${skill}/SKILL.md" tags="[]"
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --location) location="$2"; shift 2 ;;
+      --tags) tags="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  [ -f "${SCORES_DIR}/${skill}.json" ] || cmd_init "$skill" >/dev/null
+  local now
+  now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  _registry_jq '.skills[$s] = ({createdBy: "singularity-claude:create", createdAt: $now, useCount: 0, lastUsed: null}
+                + (.skills[$s] // {}) + {location: $loc, tags: $tags})' \
+    --arg s "$skill" --arg now "$now" --arg loc "$location" --argjson tags "$tags"
+  _sync_registry "$skill"
+  echo "Registered '${skill}'"
+}
+
+cmd_used() {
+  if [ "$json_tool" != "jq" ] || [ ! -f "$REGISTRY" ]; then exit 0; fi
+  local skill="$1"
+  jq -e --arg s "$skill" '.skills[$s]' "$REGISTRY" >/dev/null 2>&1 || exit 0   # not managed by singularity
+  local now
+  now=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  # ponytail: no file lock; two uses in the same instant can lose one count
+  _registry_jq '.skills[$s].useCount = ((.skills[$s].useCount // 0) + 1) | .skills[$s].lastUsed = $now' \
+    --arg s "$skill" --arg now "$now"
+}
+
+cmd_bump() {
+  _require_jq
+  local skill="$1" part="patch"
+  [ "${2:-}" = "--minor" ] && part="minor"
+  local file="${SCORES_DIR}/${skill}.json"
+  [ -f "$file" ] || { echo "No score file for '${skill}'" >&2; exit 1; }
+  local cur major minor patch new
+  cur=$(jq -r '.currentVersion' "$file")
+  IFS=. read -r major minor patch <<< "${cur#v}"
+  if [ "$part" = "minor" ]; then new="v${major}.$((minor + 1)).0"; else new="v${major}.${minor}.$((patch + 1))"; fi
+  local updated
+  updated=$(jq --arg v "$new" --arg tag "singularity/${skill}/${new}" '
+    .versions += [{version: $v, gitTag: $tag, scores: [], averageScore: 0, executionCount: 0, maturity: "draft"}]
+    | .currentVersion = $v' "$file")
+  atomic_write "$file" "$updated"
+  if [ -f "$REGISTRY" ]; then _sync_registry "$skill"; fi
+  echo "$new"
+}
+
+cmd_crystallize() {
+  _require_jq
+  local skill="$1" file="${SCORES_DIR}/${1}.json"
+  [ -f "$file" ] || { echo "No score file for '${skill}'" >&2; exit 1; }
+  local updated
+  updated=$(jq '.currentVersion as $v | (.versions[] | select(.version == $v)).maturity = "crystallized"' "$file")
+  atomic_write "$file" "$updated"
+  if [ -f "$REGISTRY" ]; then _sync_registry "$skill"; fi
+  echo "Crystallized '${skill}' $(jq -r '.currentVersion' "$file")"
+}
+
 # Main dispatch
 [ $# -lt 2 ] && usage
 
@@ -297,5 +394,9 @@ case "$cmd" in
   average) cmd_average "$@" ;;
   trend) cmd_trend "$@" ;;
   maturity) cmd_maturity "$@" ;;
+  register) cmd_register "$@" ;;
+  used) cmd_used "$@" ;;
+  bump) cmd_bump "$@" ;;
+  crystallize) cmd_crystallize "$@" ;;
   *) usage ;;
 esac
